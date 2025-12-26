@@ -8,20 +8,20 @@ datasource db {
 }
 
 model User {
-  id                    String    @id @default(auto()) @map("_id") @db.ObjectId
+  id                    String        @id @default(auto()) @map("_id") @db.ObjectId
   name                  String?
-  email                 String    @unique
+  email                 String        @unique
   emailVerified         DateTime?
   image                 String?
   hashedPassword        String?
-  subscriptionTier      String    @default("free")
-  stripeCustomerId      String?   @unique
-  stripeSubscriptionId  String?   @unique
-  creditsRemaining      Int       @default(10)
-  creditsTotal          Int       @default(10)
-  subscriptionStatus    String    @default("active")
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  subscriptionTier      String        @default("free")
+  stripeCustomerId      String?       @unique
+  stripeSubscriptionId  String?       @unique
+  creditsRemaining      Int           @default(10)
+  creditsTotal          Int           @default(10)
+  subscriptionStatus    String        @default("active")
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
   
   accounts              Account[]
   sessions              Session[]
@@ -31,17 +31,17 @@ model User {
 }
 
 model Account {
-  id                String  @id @default(auto()) @map("_id") @db.ObjectId
-  userId            String  @db.ObjectId
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId            String   @db.ObjectId
   type              String
   provider          String
   providerAccountId String
-  refresh_token     String? @db.String
-  access_token      String? @db.String
+  refresh_token     String?  @db.String
+  access_token      String?  @db.String
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String? @db.String
+  id_token          String?  @db.String
   session_state     String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -54,7 +54,8 @@ model Session {
   sessionToken String   @unique
   userId       String   @db.ObjectId
   expires      DateTime
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model VerificationToken {
@@ -67,18 +68,18 @@ model VerificationToken {
 }
 
 model Content {
-  id            String   @id @default(auto()) @map("_id") @db.ObjectId
-  userId        String   @db.ObjectId
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId        String    @db.ObjectId
   type          String
   prompt        String
-  result        String   @db.String
+  result        String    @db.String
   creditsUsed   Int
-  isFavorite    Boolean  @default(false)
-  projectId     String?  @db.ObjectId
-  createdAt     DateTime @default(now())
+  isFavorite    Boolean   @default(false)
+  projectId     String?   @db.ObjectId
+  createdAt     DateTime  @default(now())
   
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  project       Project? @relation(fields: [projectId], references: [id])
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project       Project?  @relation(fields: [projectId], references: [id])
 }
 
 model Project {
