@@ -1,15 +1,45 @@
 "use client";
 
 import { useSession } from "next-auth/react";
+import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { Bell, ChevronDown } from "lucide-react";
 
 export default function Header() {
   const { data: session } = useSession();
+  const pathname = usePathname();
+  const [credits, setCredits] = useState(session?.user?.creditsRemaining || 0);
+
+  // Fetch fresh credits
+  const fetchCredits = async () => {
+    try {
+      const response = await fetch("/api/user/credits");
+      const data = await response.json();
+      if (response.ok) {
+        setCredits(data.credits);
+      }
+    } catch (error) {
+      console.error("Failed to fetch credits:", error);
+    }
+  };
+
+  // Fetch credits on mount and when pathname changes
+  useEffect(() => {
+    fetchCredits();
+  }, [pathname]);
+
+  // Poll for credit updates every 3 seconds on generate page
+  useEffect(() => {
+    if (pathname === "/dashboard/generate") {
+      const interval = setInterval(fetchCredits, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [pathname]);
 
   return (
     <header className="bg-white border-b border-gray-200 px-8 py-4">
       <div className="flex items-center justify-between">
-        {/* Page Title - will be dynamic later */}
+        {/* Page Title */}
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
           <p className="text-sm text-gray-600">
@@ -23,7 +53,7 @@ export default function Header() {
           <div className="flex items-center space-x-2 bg-purple-50 px-4 py-2 rounded-lg">
             <div className="w-2 h-2 bg-purple-600 rounded-full animate-pulse"></div>
             <span className="text-sm font-medium text-purple-900">
-              {session?.user?.creditsRemaining || 0} Credits
+              {credits} Credits
             </span>
           </div>
 

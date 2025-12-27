@@ -167,11 +167,15 @@ export default function ContentGenerator({ userCredits, onCreditsUpdate }) {
       });
       const data = await response.json();
       if (response.ok) {
+        // Update local state
         if (onCreditsUpdate) {
           onCreditsUpdate(data.creditsRemaining);
         }
         toast.success(`Credits reset to ${data.creditsRemaining}!`);
         setShowInsufficientCreditsModal(false);
+
+        // Force page refresh to sync all components
+        window.location.reload();
       }
     } catch (error) {
       toast.error("Failed to reset credits");
