@@ -33,7 +33,9 @@ export default function Sidebar() {
         <div className="w-8 h-8 bg-gradient-to-br from-purple-600 to-blue-500 rounded-lg flex items-center justify-center">
           <span className="text-white font-bold text-xl">C</span>
         </div>
-        <span className="text-lg font-bold">ContentCraft AI</span>
+        <Link href="/">
+          <span className="text-lg font-bold">ContentCraft AI</span>
+        </Link>
       </div>
 
       {/* Navigation */}

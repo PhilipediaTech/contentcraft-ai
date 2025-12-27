@@ -14,6 +14,8 @@ import {
   Download,
   Heart,
   AlertCircle,
+  AlertTriangle,
+  FolderOpen,
 } from "lucide-react";
 
 const contentTypes = [
@@ -58,12 +60,41 @@ export default function ContentGenerator({ userCredits, onCreditsUpdate }) {
   const [generatedImage, setGeneratedImage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isDemoMode, setIsDemoMode] = useState(true);
+  const [showInsufficientCreditsModal, setShowInsufficientCreditsModal] =
+    useState(false);
+  const [showProjectMenu, setShowProjectMenu] = useState(false);
+  const [projects, setProjects] = useState([]);
 
   const currentType = contentTypes.find((t) => t.id === selectedType);
+
+  // Check if user has enough credits
+  const hasEnoughCredits = userCredits >= currentType.credits;
+
+  useEffect(() => {
+    // Fetch projects for assignment
+    const fetchProjects = async () => {
+      try {
+        const response = await fetch("/api/projects/list");
+        const data = await response.json();
+        if (response.ok) {
+          setProjects(data.projects);
+        }
+      } catch (error) {
+        console.error("Failed to fetch projects:", error);
+      }
+    };
+    fetchProjects();
+  }, []);
 
   const handleGenerate = async () => {
     if (!prompt.trim()) {
       toast.error("Please enter a prompt");
+      return;
+    }
+
+    // Check credits before generating
+    if (!hasEnoughCredits) {
+      setShowInsufficientCreditsModal(true);
       return;
     }
 
@@ -84,6 +115,14 @@ export default function ContentGenerator({ userCredits, onCreditsUpdate }) {
       const data = await response.json();
 
       if (!response.ok) {
+        // Handle insufficient credits from server
+        if (
+          data.error?.includes("Insufficient credits") ||
+          data.error?.includes("insufficient credits")
+        ) {
+          setShowInsufficientCreditsModal(true);
+          return;
+        }
         throw new Error(data.error || "Generation failed");
       }
 
@@ -121,6 +160,24 @@ export default function ContentGenerator({ userCredits, onCreditsUpdate }) {
     }
   };
 
+  const handleResetCredits = async () => {
+    try {
+      const response = await fetch("/api/credits/reset", {
+        method: "POST",
+      });
+      const data = await response.json();
+      if (response.ok) {
+        if (onCreditsUpdate) {
+          onCreditsUpdate(data.creditsRemaining);
+        }
+        toast.success(`Credits reset to ${data.creditsRemaining}!`);
+        setShowInsufficientCreditsModal(false);
+      }
+    } catch (error) {
+      toast.error("Failed to reset credits");
+    }
+  };
+
   const handleCopy = () => {
     navigator.clipboard.writeText(generatedContent);
     toast.success("Copied to clipboard!");
@@ -146,35 +203,41 @@ export default function ContentGenerator({ userCredits, onCreditsUpdate }) {
     }
   };
 
+  const handleAssignProject = async (projectId) => {
+    // This would need the content ID from a saved item
+    // For now, we'll skip this in the generator
+    setShowProjectMenu(false);
+    toast.info(
+      "Save the content first, then assign it from the Content Library"
+    );
+  };
+
   return (
-    <>
-      <div className="space-y-6">
-        {/* Demo Mode Warning - Only show if in demo mode */}
-        {isDemoMode && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <AlertCircle className="h-5 w-5 text-yellow-400" />
-              </div>
-              <div className="ml-3">
-                <h3 className="text-sm font-medium text-yellow-800">
-                  Demo Mode Active
-                </h3>
-                <div className="mt-2 text-sm text-yellow-700">
-                  <p>
-                    You're using mock content generation. Add your OpenAI API
-                    key to{" "}
-                    <code className="bg-yellow-100 px-1 rounded">
-                      .env.local
-                    </code>{" "}
-                    for real AI-powered content.
-                  </p>
-                </div>
+    <div className="space-y-6">
+      {/* Demo Mode Warning - Only show if in demo mode */}
+      {isDemoMode && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <AlertCircle className="h-5 w-5 text-yellow-400" />
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-yellow-800">
+                Demo Mode Active
+              </h3>
+              <div className="mt-2 text-sm text-yellow-700">
+                <p>
+                  You're using mock content generation. Add your OpenAI API key
+                  to{" "}
+                  <code className="bg-yellow-100 px-1 rounded">.env.local</code>{" "}
+                  for real AI-powered content.
+                </p>
               </div>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Content Type Selection */}
         <div className="lg:col-span-1">
@@ -186,6 +249,7 @@ export default function ContentGenerator({ userCredits, onCreditsUpdate }) {
               <div className="space-y-2">
                 {contentTypes.map((type) => {
                   const Icon = type.icon;
+                  const canAfford = userCredits >= type.credits;
                   return (
                     <button
                       key={type.id}
@@ -195,10 +259,13 @@ export default function ContentGenerator({ userCredits, onCreditsUpdate }) {
                         setGeneratedContent("");
                         setGeneratedImage("");
                       }}
+                      disabled={!canAfford}
                       className={`w-full flex items-start p-4 rounded-lg border-2 transition ${
                         selectedType === type.id
                           ? "border-purple-600 bg-purple-50"
-                          : "border-gray-200 hover:border-gray-300"
+                          : canAfford
+                          ? "border-gray-200 hover:border-gray-300"
+                          : "border-gray-200 opacity-50 cursor-not-allowed"
                       }`}
                     >
                       <Icon
@@ -215,8 +282,12 @@ export default function ContentGenerator({ userCredits, onCreditsUpdate }) {
                         <div className="text-xs text-gray-600 mt-1">
                           {type.description}
                         </div>
-                        <div className="text-xs text-purple-600 font-medium mt-1">
-                          {type.credits} credits
+                        <div
+                          className={`text-xs font-medium mt-1 ${
+                            canAfford ? "text-purple-600" : "text-red-600"
+                          }`}
+                        >
+                          {type.credits} credits {!canAfford && "(Not enough)"}
                         </div>
                       </div>
                     </button>
@@ -236,23 +307,10 @@ export default function ContentGenerator({ userCredits, onCreditsUpdate }) {
                 {/* Reset Credits Button - Only in demo mode */}
                 {isDemoMode && (
                   <button
-                    onClick={async () => {
-                      try {
-                        const response = await fetch("/api/credits/reset", {
-                          method: "POST",
-                        });
-                        const data = await response.json();
-                        if (response.ok) {
-                          onCreditsUpdate(data.creditsRemaining);
-                          toast.success("Credits reset to 10!");
-                        }
-                      } catch (error) {
-                        toast.error("Failed to reset credits");
-                      }
-                    }}
-                    className="mt-3 w-full text-xs text-purple-600 hover:text-purple-700 font-medium"
+                    onClick={handleResetCredits}
+                    className="mt-3 w-full text-xs text-purple-600 hover:text-purple-700 font-medium py-2 px-3 border border-purple-200 rounded-lg hover:bg-purple-50 transition"
                   >
-                    Reset Credits (Demo)
+                    🔄 Reset Credits (Demo)
                   </button>
                 )}
               </div>
@@ -283,9 +341,23 @@ export default function ContentGenerator({ userCredits, onCreditsUpdate }) {
                   />
                 </div>
 
+                {/* Warning if not enough credits */}
+                {!hasEnoughCredits && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start">
+                    <AlertTriangle className="w-5 h-5 text-red-600 mr-2 flex-shrink-0 mt-0.5" />
+                    <div className="text-sm text-red-800">
+                      <span className="font-medium">Insufficient credits.</span>{" "}
+                      You need {currentType.credits} credits but only have{" "}
+                      {userCredits}.
+                      {isDemoMode &&
+                        " Click the reset button below to get more credits."}
+                    </div>
+                  </div>
+                )}
+
                 <Button
                   onClick={handleGenerate}
-                  disabled={isLoading || !prompt.trim()}
+                  disabled={isLoading || !prompt.trim() || !hasEnoughCredits}
                   size="lg"
                   className="w-full"
                 >
@@ -370,6 +442,65 @@ export default function ContentGenerator({ userCredits, onCreditsUpdate }) {
           </Card>
         </div>
       </div>
-    </>
+
+      {/* Insufficient Credits Modal */}
+      {showInsufficientCreditsModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-8 max-w-md w-full">
+            <div className="flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mx-auto mb-4">
+              <AlertTriangle className="w-8 h-8 text-red-600" />
+            </div>
+
+            <h2 className="text-2xl font-bold text-gray-900 mb-2 text-center">
+              Insufficient Credits
+            </h2>
+            <p className="text-gray-600 text-center mb-6">
+              You need{" "}
+              <span className="font-semibold">
+                {currentType.credits} credits
+              </span>{" "}
+              to generate this content, but you only have{" "}
+              <span className="font-semibold">{userCredits} credits</span>{" "}
+              remaining.
+            </p>
+
+            <div className="space-y-3">
+              {isDemoMode ? (
+                <>
+                  <Button onClick={handleResetCredits} className="w-full">
+                    Reset Credits (Demo Mode)
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowInsufficientCreditsModal(false)}
+                    className="w-full"
+                  >
+                    Cancel
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    onClick={() =>
+                      (window.location.href = "/dashboard/billing")
+                    }
+                    className="w-full"
+                  >
+                    Upgrade Plan
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowInsufficientCreditsModal(false)}
+                    className="w-full"
+                  >
+                    Cancel
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

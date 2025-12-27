@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { formatDate, truncateText } from "@/lib/utils";
@@ -14,6 +14,7 @@ import {
   Trash2,
   Eye,
   Download,
+  FolderOpen,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -34,6 +35,8 @@ const contentColors = {
 export default function ContentCard({ content, onDelete, onToggleFavorite }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const Icon = contentIcons[content.type] || FileText;
+  const [showProjectMenu, setShowProjectMenu] = useState(false);
+  const [projects, setProjects] = useState([]);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(content.result);
@@ -80,6 +83,46 @@ export default function ContentCard({ content, onDelete, onToggleFavorite }) {
       }
     } catch (error) {
       toast.error("Failed to update favorite");
+    }
+  };
+
+  useEffect(() => {
+    // Fetch projects for assignment
+    const fetchProjects = async () => {
+      try {
+        const response = await fetch("/api/projects/list");
+        const data = await response.json();
+        if (response.ok) {
+          setProjects(data.projects);
+        }
+      } catch (error) {
+        console.error("Failed to fetch projects:", error);
+      }
+    };
+    fetchProjects();
+  }, []);
+
+  const handleAssignProject = async (projectId) => {
+    try {
+      const response = await fetch("/api/content/assign-project", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contentId: content.id,
+          projectId: projectId,
+        }),
+      });
+
+      if (response.ok) {
+        toast.success(
+          projectId ? "Assigned to project!" : "Removed from project!"
+        );
+        setShowProjectMenu(false);
+      } else {
+        toast.error("Failed to assign project");
+      }
+    } catch (error) {
+      toast.error("Failed to assign project");
     }
   };
 
@@ -162,6 +205,48 @@ export default function ContentCard({ content, onDelete, onToggleFavorite }) {
               <Copy className="w-4 h-4 mr-1" />
               Copy
             </Button>
+
+            <div className="relative">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowProjectMenu(!showProjectMenu)}
+              >
+                <FolderOpen className="w-4 h-4 mr-1" />
+                Project
+              </Button>
+
+              {showProjectMenu && (
+                <div className="absolute bottom-full left-0 mb-2 bg-white border border-gray-200 rounded-lg shadow-lg p-2 min-w-[200px] z-10">
+                  <div className="text-xs font-medium text-gray-700 mb-2 px-2">
+                    Assign to project:
+                  </div>
+                  {projects.length === 0 ? (
+                    <div className="text-xs text-gray-500 px-2 py-1">
+                      No projects yet
+                    </div>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => handleAssignProject(null)}
+                        className="w-full text-left px-2 py-1 text-sm hover:bg-gray-100 rounded"
+                      >
+                        None
+                      </button>
+                      {projects.map((project) => (
+                        <button
+                          key={project.id}
+                          onClick={() => handleAssignProject(project.id)}
+                          className="w-full text-left px-2 py-1 text-sm hover:bg-gray-100 rounded"
+                        >
+                          {project.name}
+                        </button>
+                      ))}
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
 
             {content.type === "image" && (
               <a href={content.result} download>
