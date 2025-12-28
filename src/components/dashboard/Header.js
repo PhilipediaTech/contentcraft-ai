@@ -5,30 +5,6 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Bell, ChevronDown, X } from "lucide-react";
 
-const mockNotifications = [
-  {
-    id: 1,
-    title: "Welcome to ContentCraft AI!",
-    message: "Get started by generating your first content",
-    time: "5 minutes ago",
-    read: false,
-  },
-  {
-    id: 2,
-    title: "Credits Running Low",
-    message: "You have 8 credits remaining",
-    time: "1 hour ago",
-    read: false,
-  },
-  {
-    id: 3,
-    title: "New Feature Available",
-    message: "Check out our new Projects feature",
-    time: "2 days ago",
-    read: true,
-  },
-];
-
 export default function Header() {
   const { data: session } = useSession();
   const pathname = usePathname();
@@ -37,7 +13,7 @@ export default function Header() {
     session?.user?.subscriptionTier || "free"
   );
   const [showNotifications, setShowNotifications] = useState(false);
-  const [notifications, setNotifications] = useState(mockNotifications);
+  const [notifications, setNotifications] = useState([]);
 
   // Fetch fresh credits and subscription tier
   const fetchUserData = async () => {
@@ -52,6 +28,88 @@ export default function Header() {
       console.error("Failed to fetch user data:", error);
     }
   };
+
+  // Generate dynamic notifications based on user state
+  useEffect(() => {
+    const generateNotifications = () => {
+      const newNotifications = [];
+
+      // Credits running low warning
+      if (credits < 5 && credits > 0) {
+        newNotifications.push({
+          id: "low-credits",
+          title: "Credits Running Low",
+          message: `You have ${credits} credits remaining. Consider upgrading your plan.`,
+          time: "Just now",
+          read: false,
+        });
+      }
+
+      // Out of credits warning
+      if (credits === 0) {
+        newNotifications.push({
+          id: "no-credits",
+          title: "Out of Credits",
+          message:
+            "You've used all your credits. Upgrade your plan to continue creating content.",
+          time: "Just now",
+          read: false,
+        });
+      }
+
+      // Welcome message for new users
+      if (subscriptionTier === "free" && credits === 10) {
+        newNotifications.push({
+          id: "welcome",
+          title: "Welcome to ContentCraft AI! 🎉",
+          message:
+            "Get started by generating your first content. You have 10 free credits!",
+          time: "5 minutes ago",
+          read: false,
+        });
+      }
+
+      // Upgrade success message
+      if (subscriptionTier === "pro" && credits === 500) {
+        newNotifications.push({
+          id: "upgrade-success",
+          title: "Upgrade Successful! 🚀",
+          message: "You're now on the Pro plan with 500 credits per month!",
+          time: "Just now",
+          read: false,
+        });
+      }
+
+      if (subscriptionTier === "enterprise" && credits === 9999) {
+        newNotifications.push({
+          id: "upgrade-success",
+          title: "Upgrade Successful! 🚀",
+          message: "You're now on the Enterprise plan with unlimited credits!",
+          time: "Just now",
+          read: false,
+        });
+      }
+
+      // Features notification (only show once per session)
+      const hasSeenProjects = sessionStorage.getItem(
+        "seen-projects-notification"
+      );
+      if (!hasSeenProjects) {
+        newNotifications.push({
+          id: "new-feature",
+          title: "New Feature: Projects",
+          message:
+            "Organize your content into projects for better workflow management.",
+          time: "2 days ago",
+          read: true,
+        });
+      }
+
+      setNotifications(newNotifications);
+    };
+
+    generateNotifications();
+  }, [credits, subscriptionTier]);
 
   // Fetch on mount and when pathname changes
   useEffect(() => {
@@ -79,6 +137,13 @@ export default function Header() {
 
   const markAllAsRead = () => {
     setNotifications(notifications.map((n) => ({ ...n, read: true })));
+  };
+
+  const dismissNotification = (id) => {
+    setNotifications(notifications.filter((n) => n.id !== id));
+    if (id === "new-feature") {
+      sessionStorage.setItem("seen-projects-notification", "true");
+    }
   };
 
   return (
@@ -149,13 +214,15 @@ export default function Header() {
                     notifications.map((notification) => (
                       <div
                         key={notification.id}
-                        onClick={() => markAsRead(notification.id)}
-                        className={`p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition ${
+                        className={`p-4 border-b border-gray-100 hover:bg-gray-50 transition ${
                           !notification.read ? "bg-purple-50" : ""
                         }`}
                       >
                         <div className="flex items-start justify-between">
-                          <div className="flex-1">
+                          <div
+                            className="flex-1 cursor-pointer"
+                            onClick={() => markAsRead(notification.id)}
+                          >
                             <h4 className="font-medium text-gray-900 text-sm">
                               {notification.title}
                             </h4>
@@ -166,9 +233,19 @@ export default function Header() {
                               {notification.time}
                             </p>
                           </div>
-                          {!notification.read && (
-                            <div className="w-2 h-2 bg-purple-600 rounded-full ml-2 mt-1"></div>
-                          )}
+                          <div className="flex items-center space-x-2 ml-2">
+                            {!notification.read && (
+                              <div className="w-2 h-2 bg-purple-600 rounded-full"></div>
+                            )}
+                            <button
+                              onClick={() =>
+                                dismissNotification(notification.id)
+                              }
+                              className="text-gray-400 hover:text-gray-600"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ))

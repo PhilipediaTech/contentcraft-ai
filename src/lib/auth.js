@@ -1,21 +1,11 @@
 import { PrismaAdapter } from "@auth/prisma-adapter";
-import GoogleProvider from "next-auth/providers/google";
-import GitHubProvider from "next-auth/providers/github";
 import CredentialsProvider from "next-auth/providers/credentials";
-import bcrypt from "bcryptjs";
+import { compare } from "bcryptjs";
 import { prisma } from "./prisma";
 
 export const authOptions = {
   adapter: PrismaAdapter(prisma),
   providers: [
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID || "",
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
-    }),
-    GitHubProvider({
-      clientId: process.env.GITHUB_ID || "",
-      clientSecret: process.env.GITHUB_SECRET || "",
-    }),
     CredentialsProvider({
       name: "credentials",
       credentials: {
@@ -33,37 +23,58 @@ export const authOptions = {
           },
         });
 
-        if (!user || !user?.hashedPassword) {
+        if (!user || !user.password) {
           throw new Error("Invalid credentials");
         }
 
-        const isCorrectPassword = await bcrypt.compare(
+        const isCorrectPassword = await compare(
           credentials.password,
-          user.hashedPassword
+          user.password
         );
 
         if (!isCorrectPassword) {
           throw new Error("Invalid credentials");
         }
 
-        return user;
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          subscriptionTier: user.subscriptionTier,
+          creditsRemaining: user.creditsRemaining,
+        };
       },
     }),
   ],
-  session: {
-    strategy: "jwt",
-  },
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
       if (user) {
         token.id = user.id;
         token.subscriptionTier = user.subscriptionTier;
         token.creditsRemaining = user.creditsRemaining;
       }
+
+      // Update token when session.update() is called
+      if (trigger === "update" && session) {
+        // Fetch fresh user data
+        const freshUser = await prisma.user.findUnique({
+          where: { id: token.id },
+          select: {
+            subscriptionTier: true,
+            creditsRemaining: true,
+          },
+        });
+
+        if (freshUser) {
+          token.subscriptionTier = freshUser.subscriptionTier;
+          token.creditsRemaining = freshUser.creditsRemaining;
+        }
+      }
+
       return token;
     },
     async session({ session, token }) {
-      if (session.user) {
+      if (token && session.user) {
         session.user.id = token.id;
         session.user.subscriptionTier = token.subscriptionTier;
         session.user.creditsRemaining = token.creditsRemaining;
@@ -73,6 +84,10 @@ export const authOptions = {
   },
   pages: {
     signIn: "/auth/signin",
+  },
+  session: {
+    strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30 days
   },
   secret: process.env.NEXTAUTH_SECRET,
   debug: process.env.NODE_ENV === "development",

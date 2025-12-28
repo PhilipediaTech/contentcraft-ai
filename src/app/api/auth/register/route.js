@@ -1,15 +1,22 @@
 import { NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
+import { hash } from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(request) {
   try {
-    const body = await request.json();
-    const { name, email, password } = body;
+    const { name, email, password } = await request.json();
 
+    // Validate input
     if (!name || !email || !password) {
       return NextResponse.json(
         { error: "Missing required fields" },
+        { status: 400 }
+      );
+    }
+
+    if (password.length < 6) {
+      return NextResponse.json(
+        { error: "Password must be at least 6 characters" },
         { status: 400 }
       );
     }
@@ -21,23 +28,22 @@ export async function POST(request) {
 
     if (existingUser) {
       return NextResponse.json(
-        { error: "User already exists" },
+        { error: "User with this email already exists" },
         { status: 400 }
       );
     }
 
     // Hash password
-    const hashedPassword = await bcrypt.hash(password, 12);
+    const hashedPassword = await hash(password, 12);
 
     // Create user
     const user = await prisma.user.create({
       data: {
         name,
         email,
-        hashedPassword,
+        password: hashedPassword, // This is the correct field name
         subscriptionTier: "free",
         creditsRemaining: 10,
-        creditsTotal: 10,
       },
     });
 
@@ -55,7 +61,7 @@ export async function POST(request) {
   } catch (error) {
     console.error("Registration error:", error);
     return NextResponse.json(
-      { error: "Something went wrong" },
+      { error: "Failed to create user" },
       { status: 500 }
     );
   }

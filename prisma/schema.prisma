@@ -1,3 +1,6 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -8,40 +11,39 @@ datasource db {
 }
 
 model User {
-  id                    String        @id @default(auto()) @map("_id") @db.ObjectId
-  name                  String?
-  email                 String        @unique
-  emailVerified         DateTime?
-  image                 String?
-  hashedPassword        String?
-  subscriptionTier      String        @default("free")
-  stripeCustomerId      String?       @unique
-  stripeSubscriptionId  String?       @unique
-  creditsRemaining      Int           @default(10)
-  creditsTotal          Int           @default(10)
-  subscriptionStatus    String        @default("active")
-  createdAt             DateTime      @default(now())
-  updatedAt             DateTime      @updatedAt
+  id                       String    @id @default(auto()) @map("_id") @db.ObjectId
+  name                     String
+  email                    String    @unique
+  password                 String?
+  emailVerified            DateTime?
+  image                    String?
+  subscriptionTier         String    @default("free")
+  creditsRemaining         Int       @default(10)
+  stripeCustomerId         String?
+  stripeSubscriptionId     String?
   
-  accounts              Account[]
-  sessions              Session[]
-  contents              Content[]
-  projects              Project[]
-  transactions          Transaction[]
+  accounts      Account[]
+  sessions      Session[]
+  contents      Content[]
+  projects      Project[]
+  transactions  Transaction[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Account {
-  id                String   @id @default(auto()) @map("_id") @db.ObjectId
-  userId            String   @db.ObjectId
+  id                String  @id @default(auto()) @map("_id") @db.ObjectId
+  userId            String  @db.ObjectId
   type              String
   provider          String
   providerAccountId String
-  refresh_token     String?  @db.String
-  access_token      String?  @db.String
+  refresh_token     String? @db.String
+  access_token      String? @db.String
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String?  @db.String
+  id_token          String? @db.String
   session_state     String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -54,8 +56,7 @@ model Session {
   sessionToken String   @unique
   userId       String   @db.ObjectId
   expires      DateTime
-  
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model VerificationToken {
@@ -68,18 +69,20 @@ model VerificationToken {
 }
 
 model Content {
-  id            String    @id @default(auto()) @map("_id") @db.ObjectId
-  userId        String    @db.ObjectId
-  type          String
-  prompt        String
-  result        String    @db.String
-  creditsUsed   Int
-  isFavorite    Boolean   @default(false)
-  projectId     String?   @db.ObjectId
-  createdAt     DateTime  @default(now())
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId       String   @db.ObjectId
+  projectId    String?  @db.ObjectId
+  type         String
+  prompt       String
+  result       String   @db.String
+  creditsUsed  Int
+  isFavorite   Boolean  @default(false)
   
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  project       Project?  @relation(fields: [projectId], references: [id])
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Project {
@@ -88,21 +91,23 @@ model Project {
   name         String
   description  String?
   contentCount Int       @default(0)
-  createdAt    DateTime  @default(now())
   
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  contents     Content[]
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contents Content[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Transaction {
-  id                    String   @id @default(auto()) @map("_id") @db.ObjectId
-  userId                String   @db.ObjectId
-  type                  String
-  amount                Float
-  currency              String   @default("usd")
-  stripePaymentIntentId String?
-  status                String
-  createdAt             DateTime @default(now())
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId       String   @db.ObjectId
+  amount       Float
+  description  String
+  status       String
+  creditsAdded Int?
   
-  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
 }
