@@ -23,8 +23,8 @@ export default async function DashboardPage() {
           Welcome back, {session?.user?.name}! 👋
         </h1>
         <p className="text-purple-100 mb-6">
-          You have {session?.user?.creditsRemaining} credits remaining this
-          month
+          Confirm your remaining credits this month and start creating amazing
+          content with AI.
         </p>
         <Link href="/dashboard/generate">
           <Button
