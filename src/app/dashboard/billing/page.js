@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { CreditCard, Check, Clock, TrendingUp, Calendar } from "lucide-react";
@@ -41,58 +42,120 @@ const plans = [
   },
 ];
 
-const mockTransactions = [
-  {
-    id: "1",
-    date: "2025-12-28",
-    description: "Pro Plan - Monthly Subscription",
-    amount: 19.0,
-    status: "completed",
-    credits: 500,
-  },
-  {
-    id: "2",
-    date: "2025-11-28",
-    description: "Pro Plan - Monthly Subscription",
-    amount: 19.0,
-    status: "completed",
-    credits: 500,
-  },
-  {
-    id: "3",
-    date: "2025-10-28",
-    description: "Pro Plan - Monthly Subscription",
-    amount: 19.0,
-    status: "completed",
-    credits: 500,
-  },
-];
-
 export default function BillingPage() {
-  const [currentPlan, setCurrentPlan] = useState("free");
+  const { data: session, update } = useSession();
+  const [currentPlan, setCurrentPlan] = useState(
+    session?.user?.subscriptionTier || "free"
+  );
+  const [currentCredits, setCurrentCredits] = useState(
+    session?.user?.creditsRemaining || 10
+  );
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState(null);
+  const [isUpgrading, setIsUpgrading] = useState(false);
+  const [transactions, setTransactions] = useState([]);
+
+  // Fetch current user data
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        const response = await fetch("/api/user/credits");
+        const data = await response.json();
+        if (response.ok) {
+          setCurrentCredits(data.credits);
+          setCurrentPlan(data.tier);
+        }
+      } catch (error) {
+        console.error("Failed to fetch user data:", error);
+      }
+    };
+
+    fetchUserData();
+  }, []);
+
+  // Fetch transactions
+  useEffect(() => {
+    const fetchTransactions = async () => {
+      try {
+        const response = await fetch("/api/billing/transactions");
+        const data = await response.json();
+        if (response.ok) {
+          setTransactions(data.transactions || []);
+        }
+      } catch (error) {
+        console.error("Failed to fetch transactions:", error);
+        // Use mock data if API fails
+        setTransactions([
+          {
+            id: "1",
+            createdAt: new Date().toISOString(),
+            description: "Initial signup - Free plan",
+            amount: 0,
+            status: "completed",
+          },
+        ]);
+      }
+    };
+
+    fetchTransactions();
+  }, [currentPlan]);
 
   const handleUpgrade = (plan) => {
     setSelectedPlan(plan);
     setShowUpgradeModal(true);
   };
 
-  const handleConfirmUpgrade = () => {
+  const handleConfirmUpgrade = async () => {
     if (!selectedPlan) return;
 
-    // Mock upgrade - simulate successful payment
-    toast.success(
-      `Successfully upgraded to ${selectedPlan.name} plan! (Demo Mode)`
-    );
-    setCurrentPlan(selectedPlan.id);
-    setShowUpgradeModal(false);
+    setIsUpgrading(true);
 
-    // In demo mode, just show success message
-    setTimeout(() => {
-      toast.info("💡 This is a demo. No real payment was processed.");
-    }, 1500);
+    try {
+      const response = await fetch("/api/billing/upgrade", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          planId: selectedPlan.id,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Update local state
+        setCurrentPlan(data.subscriptionTier);
+        setCurrentCredits(data.creditsRemaining);
+
+        // Update session
+        await update();
+
+        toast.success(
+          `Successfully upgraded to ${selectedPlan.name} plan! (Demo Mode)`
+        );
+        setShowUpgradeModal(false);
+        setSelectedPlan(null);
+
+        // Show demo reminder
+        setTimeout(() => {
+          toast.info("💡 This is a demo. No real payment was processed.");
+        }, 1500);
+
+        // Reload transactions
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
+      } else {
+        toast.error(data.error || "Failed to upgrade plan");
+      }
+    } catch (error) {
+      console.error("Upgrade error:", error);
+      toast.error("Failed to upgrade plan");
+    } finally {
+      setIsUpgrading(false);
+    }
   };
+
+  const currentPlanData = plans.find((p) => p.id === currentPlan);
 
   return (
     <div className="space-y-6">
@@ -135,16 +198,15 @@ export default function BillingPage() {
           <div className="flex items-center justify-between">
             <div>
               <div className="text-2xl font-bold text-gray-900 capitalize">
-                {currentPlan} Plan
+                {currentPlanData?.name || currentPlan} Plan
               </div>
               <div className="text-sm text-gray-600 mt-1">
-                {plans.find((p) => p.id === currentPlan)?.credits} credits per
-                month
+                {currentCredits} credits remaining
               </div>
             </div>
             <div className="text-right">
               <div className="text-3xl font-bold text-purple-600">
-                ${plans.find((p) => p.id === currentPlan)?.price}
+                ${currentPlanData?.price || 0}
               </div>
               <div className="text-sm text-gray-600">/month</div>
             </div>
@@ -214,45 +276,45 @@ export default function BillingPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {mockTransactions.map((transaction) => (
-              <div
-                key={transaction.id}
-                className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
-              >
-                <div className="flex items-center space-x-4">
-                  <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                    <CreditCard className="w-5 h-5 text-green-600" />
-                  </div>
-                  <div>
-                    <div className="font-medium text-gray-900">
-                      {transaction.description}
+            {transactions.length > 0 ? (
+              transactions.map((transaction) => (
+                <div
+                  key={transaction.id}
+                  className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
+                >
+                  <div className="flex items-center space-x-4">
+                    <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                      <CreditCard className="w-5 h-5 text-green-600" />
                     </div>
-                    <div className="text-sm text-gray-600 flex items-center mt-1">
-                      <Calendar className="w-4 h-4 mr-1" />
-                      {new Date(transaction.date).toLocaleDateString()}
+                    <div>
+                      <div className="font-medium text-gray-900">
+                        {transaction.description}
+                      </div>
+                      <div className="text-sm text-gray-600 flex items-center mt-1">
+                        <Calendar className="w-4 h-4 mr-1" />
+                        {new Date(transaction.createdAt).toLocaleDateString()}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="text-right">
-                  <div className="font-bold text-gray-900">
-                    ${transaction.amount.toFixed(2)}
-                  </div>
-                  <div className="text-sm text-green-600 flex items-center justify-end">
-                    <Check className="w-4 h-4 mr-1" />
-                    {transaction.status}
+                  <div className="text-right">
+                    <div className="font-bold text-gray-900">
+                      ${transaction.amount.toFixed(2)}
+                    </div>
+                    <div className="text-sm text-green-600 flex items-center justify-end">
+                      <Check className="w-4 h-4 mr-1" />
+                      {transaction.status}
+                    </div>
                   </div>
                 </div>
+              ))
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <Clock className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                <p>No transactions yet</p>
               </div>
-            ))}
+            )}
           </div>
-
-          {mockTransactions.length === 0 && (
-            <div className="text-center py-8 text-gray-500">
-              <Clock className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-              <p>No transactions yet</p>
-            </div>
-          )}
         </CardContent>
       </Card>
 
@@ -263,7 +325,9 @@ export default function BillingPage() {
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-sm text-gray-600 mb-1">Credits Used</div>
-                <div className="text-2xl font-bold text-gray-900">2</div>
+                <div className="text-2xl font-bold text-gray-900">
+                  {(currentPlanData?.credits || 10) - currentCredits}
+                </div>
               </div>
               <TrendingUp className="w-8 h-8 text-purple-600" />
             </div>
@@ -277,7 +341,9 @@ export default function BillingPage() {
                 <div className="text-sm text-gray-600 mb-1">
                   Credits Remaining
                 </div>
-                <div className="text-2xl font-bold text-gray-900">8</div>
+                <div className="text-2xl font-bold text-gray-900">
+                  {currentCredits}
+                </div>
               </div>
               <CreditCard className="w-8 h-8 text-blue-600" />
             </div>
@@ -297,12 +363,13 @@ export default function BillingPage() {
         </Card>
       </div>
 
-      {/* Upgrade Modal - FIXED */}
+      {/* Upgrade Modal */}
       {showUpgradeModal && selectedPlan && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-8 max-w-md w-full">
             <h2 className="text-2xl font-bold text-gray-900 mb-4">
-              Upgrade to {selectedPlan.name}?
+              {selectedPlan.price === 0 ? "Downgrade to" : "Upgrade to"}{" "}
+              {selectedPlan.name}?
             </h2>
 
             <div className="bg-purple-50 rounded-lg p-4 mb-6">
@@ -331,12 +398,21 @@ export default function BillingPage() {
                   setShowUpgradeModal(false);
                   setSelectedPlan(null);
                 }}
+                disabled={isUpgrading}
                 className="flex-1"
               >
                 Cancel
               </Button>
-              <Button onClick={handleConfirmUpgrade} className="flex-1">
-                Confirm Upgrade (Demo)
+              <Button
+                onClick={handleConfirmUpgrade}
+                disabled={isUpgrading}
+                className="flex-1"
+              >
+                {isUpgrading
+                  ? "Processing..."
+                  : `Confirm ${
+                      selectedPlan.price === 0 ? "Downgrade" : "Upgrade"
+                    } (Demo)`}
               </Button>
             </div>
           </div>
