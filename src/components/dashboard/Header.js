@@ -33,31 +33,38 @@ export default function Header() {
   const { data: session } = useSession();
   const pathname = usePathname();
   const [credits, setCredits] = useState(session?.user?.creditsRemaining || 0);
+  const [subscriptionTier, setSubscriptionTier] = useState(
+    session?.user?.subscriptionTier || "free"
+  );
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState(mockNotifications);
 
-  // Fetch fresh credits
-  const fetchCredits = async () => {
+  // Fetch fresh credits and subscription tier
+  const fetchUserData = async () => {
     try {
       const response = await fetch("/api/user/credits");
       const data = await response.json();
       if (response.ok) {
         setCredits(data.credits);
+        setSubscriptionTier(data.tier);
       }
     } catch (error) {
-      console.error("Failed to fetch credits:", error);
+      console.error("Failed to fetch user data:", error);
     }
   };
 
-  // Fetch credits on mount and when pathname changes
+  // Fetch on mount and when pathname changes
   useEffect(() => {
-    fetchCredits();
+    fetchUserData();
   }, [pathname]);
 
-  // Poll for credit updates every 3 seconds on generate page
+  // Poll for updates every 3 seconds on generate and billing pages
   useEffect(() => {
-    if (pathname === "/dashboard/generate") {
-      const interval = setInterval(fetchCredits, 3000);
+    if (
+      pathname === "/dashboard/generate" ||
+      pathname === "/dashboard/billing"
+    ) {
+      const interval = setInterval(fetchUserData, 3000);
       return () => clearInterval(interval);
     }
   }, [pathname]);
@@ -183,7 +190,7 @@ export default function Header() {
                 {session?.user?.name || "User"}
               </div>
               <div className="text-xs text-gray-600 capitalize">
-                {session?.user?.subscriptionTier || "Free"} Plan
+                {subscriptionTier} Plan
               </div>
             </div>
             <ChevronDown className="w-4 h-4 text-gray-600" />
